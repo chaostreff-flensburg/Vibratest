@@ -23,6 +23,21 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
+#include <Adafruit_GFX.h>
+#include <Adafruit_NeoMatrix.h>
+#include <Adafruit_NeoPixel.h>
+
+//*******************************************************************************************************************
+
+// LED-Matrix Config
+#ifndef PSTR
+  #define PSTR // Make Arduino Due happy
+#endif
+
+#define LEDPIN 4
+
+Adafruit_NeoMatrix matrix = Adafruit_NeoMatrix(16, 8, LEDPIN, NEO_MATRIX_TOP + NEO_MATRIX_RIGHT + NEO_MATRIX_COLUMNS + NEO_MATRIX_PROGRESSIVE, NEO_GRB + NEO_KHZ800);
+
 //*******************************************************************************************************************
 
 // Umfang der Messreihe
@@ -62,13 +77,17 @@ void setup() {
   Serial.begin(19200);
   Wire.begin();
   
-  if (!gyro.init())
-  {
+  if (!gyro.init()) {
     Serial.println("Failed to autodetect gyro type!");
     while (1);
   }
-    gyro.enableDefault();
-    
+  gyro.enableDefault();
+
+  matrix.begin();
+  // matrix.setRotation(2);
+  matrix.setTextWrap(false);
+  matrix.setBrightness(40);
+  matrix.setTextColor(matrix.Color(255, 0, 0));
 }
 
 //*******************************************************************************************************************
@@ -84,6 +103,39 @@ void sort(int a[], int size) {
       }
     }
   }
+}
+
+//*******************************************************************************************************************
+
+// Matrix-Pixel-Buffer Logic
+int pixelBuffer[] = {0,1,2,3,4,5,6,7,8,0,1,2,3,4,5,6};
+
+void pushValue(int value) {
+  for (int i = 15; i > 0; i--) {
+    pixelBuffer[i] = pixelBuffer[i-1];
+  }
+  pixelBuffer[0] = value;
+}
+
+void graphData(int value) {
+  pushValue(value);
+  for (int i = 0; i < 16; i++) {
+    for (int j = 0; j < 8; j++) {
+      uint16_t color;
+
+      if ( pixelBuffer[i] >= (j+1) ) {
+        if (j < 4) { color = matrix.Color(0, 255, 60); }
+        else if (j > 5) { color = matrix.Color(255, 0, 0); }
+        else { color = matrix.Color(255, 240, 0); }
+      }
+      else {
+        color = matrix.Color(0, 0, 0);
+      }
+
+      matrix.drawPixel(i, j, color);
+    }
+  }
+  matrix.show();
 }
 
 //*******************************************************************************************************************
@@ -146,5 +198,7 @@ void loop() {
   }
   Serial.println(durchschnitt_neu);
 
-delay(200);
+  graphData(durchschnitt_neu);
+
+  delay(200);
 }
