@@ -33,7 +33,7 @@
 #define WEIGHT 35     // Anteil der neuen Sensorwerte in Prozent
 
 int scale = 80;       // Stauchung der Y-Achse ************** ggf über Poti einstellen??? *************************
-int overload = 800;   // Begrenzung der Y-Ache. Ohne Begrenzung werden sehr große Werte auf 0 gesetzt                          
+int overload = 8;   // Begrenzung der Y-Ache. Ohne Begrenzung werden sehr große Werte auf 0 gesetzt                          
 
 //*******************************************************************************************************************
 
@@ -134,17 +134,17 @@ void loop() {
   }
 
 // Tiefpassfilterung
-  durchschnitt_neu = (100 - WEIGHT)  * durchschnitt_alt / 100 + WEIGHT  * (dx + dy + dz) / 300;
+  durchschnitt_neu = ((100 - WEIGHT)  * durchschnitt_alt / 100 + WEIGHT  * (dx + dy + dz) / 300)/scale;
   durchschnitt_alt = durchschnitt_neu;
 
 // Ausgabe des Durchschnitts
-  if (durchschnitt_neu / scale < 0) {
+  if (durchschnitt_neu < 0) {
     durchschnitt_neu = 0;
   }
-  if (durchschnitt_neu / scale > overload) {
+  if (durchschnitt_neu > overload) {
     durchschnitt_neu = overload;
   }
-  Serial.println(durchschnitt_neu / scale);
+  Serial.println(durchschnitt_neu);
 
-delay(100);
+delay(200);
 }
