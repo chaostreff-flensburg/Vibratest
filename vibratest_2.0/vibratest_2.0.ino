@@ -1,19 +1,13 @@
 /*
- *  Mit diesem Sektch können Vibrationen im niedrigen Hz-Bereich visualisiert werden.
- *  Mit Hilfe eines drei-Achsen-Beschleunigungssensors wird die Gesamtbeschleunigung ermittelt.
- *  Zunächst wird eine Messreihe aufgenommen #MEASURMENTS,
- *  anschließend wird die Messreihe der Größe nach sortiert #sort
- *  und aus die höchsten und niedrigsten Werte entfernt #CUT.
- *  Aus den verbleibenden Werten wird das arithmetische Mittel bestimmt.
- *  Eine Glättung Ausgabewerte erfolgt zum Schluss durch eine Tiefpassfilterung,
- *  welche die Antuellen Messwerte mit den vorangegangenen Messwerten ins Verhältnis setzt #WEIGHT
- */
-
-// Pinbelegung des XYZ-Beschleunigungssensors
-// sw - gnd
-// rt - 5v
-// gr - A4  I2C
-// ws - A5  I2C
+    Mit diesem Sektch können Vibrationen im niedrigen Hz-Bereich visualisiert werden.
+    Mit Hilfe eines drei-Achsen-Beschleunigungssensors wird die Gesamtbeschleunigung ermittelt.
+    Zunächst wird eine Messreihe aufgenommen #MEASURMENTS,
+    anschließend wird die Messreihe der Größe nach sortiert #sort
+    und aus die höchsten und niedrigsten Werte entfernt #CUT.
+    Aus den verbleibenden Werten wird das arithmetische Mittel bestimmt.
+    Eine Glättung Ausgabewerte erfolgt zum Schluss durch eine Tiefpassfilterung,
+    welche die Antuellen Messwerte mit den vorangegangenen Messwerten ins Verhältnis setzt #WEIGHT
+*/
 
 //*******************************************************************************************************************
 
@@ -31,12 +25,18 @@
 
 // LED-Matrix Config
 #ifndef PSTR
-  #define PSTR // Make Arduino Due happy
+#define PSTR // Make Arduino Due happy
 #endif
 
 #define LEDPIN 4
 
 Adafruit_NeoMatrix matrix = Adafruit_NeoMatrix(16, 8, LEDPIN, NEO_MATRIX_TOP + NEO_MATRIX_RIGHT + NEO_MATRIX_COLUMNS + NEO_MATRIX_PROGRESSIVE, NEO_GRB + NEO_KHZ800);
+
+// Demo
+int x    = matrix.width();
+int pass = 0;
+const uint16_t democolors[] = {
+  matrix.Color(255, 0, 0), matrix.Color(0, 255, 0), matrix.Color(0, 0, 255) };
 
 //*******************************************************************************************************************
 
@@ -47,8 +47,8 @@ Adafruit_NeoMatrix matrix = Adafruit_NeoMatrix(16, 8, LEDPIN, NEO_MATRIX_TOP + N
 #define CUT 5         // schneidet die höchten und tiefsten Messwerte aus
 #define WEIGHT 35     // Anteil der neuen Sensorwerte in Prozent
 
-int scale = 80;       // Stauchung der Y-Achse ************** ggf über Poti einstellen??? *************************
-int overload = 8;   // Begrenzung der Y-Ache. Ohne Begrenzung werden sehr große Werte auf 0 gesetzt                          
+int scale = 80;       // Stauchung der Y-Achse 
+int overload = 8;     // Begrenzung der Y-Ache. Ohne Begrenzung werden sehr große Werte auf 0 gesetzt
 
 //*******************************************************************************************************************
 
@@ -73,10 +73,17 @@ float durchschnitt_neu;
 
 //*******************************************************************************************************************
 
+const int measure_button = 2;
+const int demo_button = 3;
+bool measurstate = false;
+bool demostate = true;
+
+//*******************************************************************************************************************
+
 void setup() {
   Serial.begin(19200);
   Wire.begin();
-  
+
   if (!gyro.init()) {
     Serial.println("Failed to autodetect gyro type!");
     while (1);
@@ -88,6 +95,9 @@ void setup() {
   matrix.setTextWrap(false);
   matrix.setBrightness(40);
   matrix.setTextColor(matrix.Color(255, 0, 0));
+
+  pinMode(measure_button, INPUT);
+  pinMode(demo_button, INPUT);
 }
 
 //*******************************************************************************************************************
@@ -108,11 +118,11 @@ void sort(int a[], int size) {
 //*******************************************************************************************************************
 
 // Matrix-Pixel-Buffer Logic
-int pixelBuffer[] = {0,1,2,3,4,5,6,7,8,0,1,2,3,4,5,6};
+int pixelBuffer[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 1, 2, 3, 4, 5, 6};
 
 void pushValue(int value) {
   for (int i = 15; i > 0; i--) {
-    pixelBuffer[i] = pixelBuffer[i-1];
+    pixelBuffer[i] = pixelBuffer[i - 1];
   }
   pixelBuffer[0] = value;
 }
@@ -123,15 +133,20 @@ void graphData(int value) {
     for (int j = 0; j < 8; j++) {
       uint16_t color;
 
-      if ( pixelBuffer[i] >= (j+1) ) {
-        if (j < 4) { color = matrix.Color(0, 255, 60); }
-        else if (j > 5) { color = matrix.Color(255, 0, 0); }
-        else { color = matrix.Color(255, 240, 0); }
+      if ( pixelBuffer[i] >= (j + 1) ) {
+        if (j < 4) {
+          color = matrix.Color(0, 255, 60);
+        }
+        else if (j > 5) {
+          color = matrix.Color(255, 0, 0);
+        }
+        else {
+          color = matrix.Color(255, 240, 0);
+        }
       }
       else {
         color = matrix.Color(0, 0, 0);
       }
-
       matrix.drawPixel(i, j, color);
     }
   }
@@ -141,64 +156,91 @@ void graphData(int value) {
 //*******************************************************************************************************************
 
 void loop() {
+
+  // Schaltung von Messung bzw. Demo
+  if (measure_button) {
+    measurstate = true;
+    demostate = false;
+  }
+  if (demo_button) {
+    measurstate = false;
+    demostate = true;
+  }
   
-// Messwerterfassung
-  for (int i = 0; i < tt; i++) {
-    gyro.read();
-    aa = (int)gyro.g.x;
-    if (aa < 0) {
-      bb = -aa;
-    } else {
-      bb = aa;
+  //*****************************************************************************************************************
+  if (measurstate) {
+    // Messwerterfassung
+    for (int i = 0; i < tt; i++) {
+      gyro.read();
+      aa = (int)gyro.g.x;
+      if (aa < 0) {
+        bb = -aa;
+      } else {
+        bb = aa;
+      }
+      X[i] = bb;
+      aa = (int)gyro.g.y;
+      if (aa < 0) {
+        bb = -aa;
+      } else {
+        bb = aa;
+      }
+      Y[i] = bb;
+      aa = (int)gyro.g.z;
+      if (aa < 0) {
+        bb = -aa;
+      } else {
+        bb = aa;
+      }
+      Z[i] = bb;
+      delayMicroseconds(5);
     }
-    X[i] = bb;
-    aa = (int)gyro.g.y;
-    if (aa < 0) {
-      bb = -aa;
-    } else {
-      bb = aa;
+
+    // Sortieren der Messwerte
+    sort(X, MEASURMENTS);
+    sort(Y, MEASURMENTS);
+    sort(Z, MEASURMENTS);
+
+    // Berechnung der Durchnittswerte der einzelnen Achsen
+    dx = 0;
+    dy = 0;
+    dz = 0;
+
+    for (int i = (CUT - 1); i < (MEASURMENTS - CUT); i++) {
+      dx = dx + X[i] / (MEASURMENTS - 2 * CUT);
+      dy = dy + Y[i] / (MEASURMENTS - 2 * CUT);
+      dz = dz + Z[i] / (MEASURMENTS - 2 * CUT);
     }
-    Y[i] = bb;
-    aa = (int)gyro.g.z;
-    if (aa < 0) {
-      bb = -aa;
-    } else {
-      bb = aa;
+
+    // Tiefpassfilterung
+    durchschnitt_neu = ((100 - WEIGHT)  * durchschnitt_alt / 100 + WEIGHT  * (dx + dy + dz) / 300) / scale;
+    durchschnitt_alt = durchschnitt_neu;
+
+    // Ausgabe des Durchschnitts
+    if (durchschnitt_neu < 0) {
+      durchschnitt_neu = 0;
     }
-    Z[i] = bb;
-    delayMicroseconds(5);
+    if (durchschnitt_neu > overload) {
+      durchschnitt_neu = overload;
+    }
+    Serial.println(durchschnitt_neu);
+
+    graphData(durchschnitt_neu);
+    delay(200);
+  }
+  
+  //*****************************************************************************************************************
+  if (demostate) {
+    matrix.fillScreen(0);
+    matrix.setCursor(x, 0);
+    matrix.print(F("ORION"));
+    if (--x < -36) {
+      x = matrix.width();
+      if (++pass >= 3) pass = 0;
+      matrix.setTextColor(democolors[pass]);
+    }
+    matrix.show();
+    delay(100);
   }
 
-// Sortieren der Messwerte 
-  sort(X, MEASURMENTS);
-  sort(Y, MEASURMENTS);
-  sort(Z, MEASURMENTS);
-
-// Berechnung der Durchnittswerte der einzelnen Achsen
-  dx = 0;
-  dy = 0;
-  dz = 0;
-
-  for (int i = (CUT - 1); i < (MEASURMENTS - CUT); i++) {
-    dx = dx + X[i] / (MEASURMENTS - 2 * CUT);
-    dy = dy + Y[i] / (MEASURMENTS - 2 * CUT);
-    dz = dz + Z[i] / (MEASURMENTS - 2 * CUT);
-  }
-
-// Tiefpassfilterung
-  durchschnitt_neu = ((100 - WEIGHT)  * durchschnitt_alt / 100 + WEIGHT  * (dx + dy + dz) / 300)/scale;
-  durchschnitt_alt = durchschnitt_neu;
-
-// Ausgabe des Durchschnitts
-  if (durchschnitt_neu < 0) {
-    durchschnitt_neu = 0;
-  }
-  if (durchschnitt_neu > overload) {
-    durchschnitt_neu = overload;
-  }
-  Serial.println(durchschnitt_neu);
-
-  graphData(durchschnitt_neu);
-
-  delay(200);
 }
