@@ -3,10 +3,15 @@
     Mit Hilfe eines drei-Achsen-Beschleunigungssensors wird die Gesamtbeschleunigung ermittelt.
     Zunächst wird eine Messreihe aufgenommen #MEASURMENTS,
     anschließend wird die Messreihe der Größe nach sortiert #sort
-    und aus die höchsten und niedrigsten Werte entfernt #CUT.
+    und die höchsten und niedrigsten Werte entfernt #CUT.
     Aus den verbleibenden Werten wird das arithmetische Mittel bestimmt.
-    Eine Glättung Ausgabewerte erfolgt zum Schluss durch eine Tiefpassfilterung,
-    welche die Antuellen Messwerte mit den vorangegangenen Messwerten ins Verhältnis setzt #WEIGHT
+    Eine Glättung der Ausgabewerte erfolgt zum Schluss durch eine Tiefpassfilterung,
+    welche die aktuellen Messwerte mit den vorangegangenen Messwerten ins Verhältnis setzt #WEIGHT.
+
+    Die Ausgabe der Messwerte erfolgt über zwei 8x8 LED-Matrizen.
+
+    Mit Hilfe zweier Schalter kann von dem Messmodus ind einen Demomodus umgeschaltet werden,
+    in dem die Matrizen ein vordefiniertes Programm ablaufen.
 */
 
 //*******************************************************************************************************************
@@ -28,15 +33,16 @@
 #define PSTR // Make Arduino Due happy
 #endif
 
-#define LEDPIN 4
+#define PIN 4
 
-Adafruit_NeoMatrix matrix = Adafruit_NeoMatrix(16, 8, LEDPIN, NEO_MATRIX_TOP + NEO_MATRIX_RIGHT + NEO_MATRIX_COLUMNS + NEO_MATRIX_PROGRESSIVE, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoMatrix matrix = Adafruit_NeoMatrix(16, 8, PIN, NEO_MATRIX_TOP + NEO_MATRIX_RIGHT + NEO_MATRIX_COLUMNS + NEO_MATRIX_PROGRESSIVE, NEO_GRB + NEO_KHZ800);
 
 // Demo
-int x    = matrix.width();
+int xx    = matrix.width();
 int pass = 0;
-const uint16_t democolors[] = {
-  matrix.Color(255, 0, 0), matrix.Color(0, 255, 0), matrix.Color(0, 0, 255) };
+const uint16_t colors[] = {
+  matrix.Color(255, 0, 0), matrix.Color(0, 255, 0), matrix.Color(0, 0, 255)
+};
 
 //*******************************************************************************************************************
 
@@ -47,7 +53,7 @@ const uint16_t democolors[] = {
 #define CUT 5         // schneidet die höchten und tiefsten Messwerte aus
 #define WEIGHT 35     // Anteil der neuen Sensorwerte in Prozent
 
-int scale = 80;       // Stauchung der Y-Achse 
+int scale = 80;       // Stauchung der Y-Achse
 int overload = 8;     // Begrenzung der Y-Ache. Ohne Begrenzung werden sehr große Werte auf 0 gesetzt
 
 //*******************************************************************************************************************
@@ -73,10 +79,10 @@ float durchschnitt_neu;
 
 //*******************************************************************************************************************
 
-const int measure_button = 2;
-const int demo_button = 3;
-bool measurstate = false;
-bool demostate = true;
+#define measure_button 2
+#define demo_button 3
+bool measurestate;
+bool demostate;
 
 //*******************************************************************************************************************
 
@@ -91,13 +97,15 @@ void setup() {
   gyro.enableDefault();
 
   matrix.begin();
-  // matrix.setRotation(2);
+  //matrix.setRotation(2);
   matrix.setTextWrap(false);
   matrix.setBrightness(40);
-  matrix.setTextColor(matrix.Color(255, 0, 0));
+  matrix.setTextColor(colors[0]);
 
   pinMode(measure_button, INPUT);
   pinMode(demo_button, INPUT);
+  measurestate = true;
+  demostate = false;
 }
 
 //*******************************************************************************************************************
@@ -158,17 +166,19 @@ void graphData(int value) {
 void loop() {
 
   // Schaltung von Messung bzw. Demo
-  if (measure_button) {
-    measurstate = true;
+  if (digitalRead(measure_button)) {
+    matrix.setRotation(0);
+    measurestate = true;
     demostate = false;
   }
-  if (demo_button) {
-    measurstate = false;
+  if (digitalRead(demo_button)) {
+    matrix.setRotation(2);
+    measurestate = false;
     demostate = true;
   }
-  
+
   //*****************************************************************************************************************
-  if (measurstate) {
+  if (measurestate) {
     // Messwerterfassung
     for (int i = 0; i < tt; i++) {
       gyro.read();
@@ -228,19 +238,18 @@ void loop() {
     graphData(durchschnitt_neu);
     delay(200);
   }
-  
+
   //*****************************************************************************************************************
   if (demostate) {
-    matrix.fillScreen(0);
-    matrix.setCursor(x, 0);
-    matrix.print(F("ORION"));
-    if (--x < -36) {
-      x = matrix.width();
-      if (++pass >= 3) pass = 0;
-      matrix.setTextColor(democolors[pass]);
-    }
-    matrix.show();
-    delay(100);
+  matrix.fillScreen(0);
+  matrix.setCursor(xx, 0);
+  matrix.print(F("ORION"));
+  if(--xx < -36) {
+    xx = matrix.width();
+    if(++pass >= 3) pass = 0;
+    matrix.setTextColor(colors[pass]);
   }
-
+  matrix.show();
+  delay(100);
+  }
 }
